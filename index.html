@@ -2,36 +2,57 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
 
-<title>CrossCut Align Tool</title>
+<title>CrossCut Alignment Tool</title>
 
 <style>
 
 body{
     background:#111;
     color:white;
-    font-family:Arial;
+    font-family:Arial,sans-serif;
+    margin:0;
+    padding:10px;
     text-align:center;
 }
 
 canvas{
+    width:95vw;
+    max-width:900px;
     border:1px solid #666;
-    width:95%;
-    max-width:800px;
+    touch-action:none;
+    background:#000;
 }
 
 .panel{
-    margin:10px;
+
+    width:95vw;
+    max-width:900px;
+
+    margin:auto;
+    margin-top:10px;
+
+    background:#222;
+    padding:10px;
+
+    border-radius:10px;
 }
 
 label{
     display:block;
-    margin:8px;
+    margin-top:10px;
 }
 
 input[type=range]{
-    width:250px;
+    width:90%;
+}
+
+button{
+    margin-top:15px;
+    padding:10px 20px;
+    font-size:18px;
 }
 
 </style>
@@ -40,78 +61,93 @@ input[type=range]{
 
 <h2>CrossCut Alignment Tool</h2>
 
-<input type="file" id="fileInput" accept="image/*">
+<input
+type="file"
+id="fileInput"
+accept="image/*">
 
 <br><br>
 
-<canvas id="canvas" width="800" height="800"></canvas>
+<canvas
+id="canvas"
+width="900"
+height="900">
+</canvas>
 
 <div class="panel">
 
+<h3>사진 조절</h3>
+
 <label>
 사진 확대
-<input id="imgScale"
+<input
+id="imgScale"
 type="range"
-min="0.5"
-max="5"
-step="0.1"
+min="0.2"
+max="10"
+step="0.05"
 value="1">
 </label>
 
 <label>
-사진 X
-<input id="imgX"
+사진 회전
+<input
+id="imgRotation"
 type="range"
-min="-500"
-max="500"
+min="-180"
+max="180"
+value="0">
+</label>
+
+<label>
+사진 X
+<input
+id="imgX"
+type="range"
+min="-1000"
+max="1000"
 value="0">
 </label>
 
 <label>
 사진 Y
-<input id="imgY"
+<input
+id="imgY"
 type="range"
-min="-500"
-max="500"
+min="-1000"
+max="1000"
 value="0">
 </label>
 
 <hr>
 
+<h3>Grid 조절</h3>
+
 <label>
 Grid 크기
-<input id="gridSize"
+<input
+id="gridSize"
 type="range"
 min="50"
-max="500"
-value="200">
+max="800"
+value="250">
 </label>
 
 <label>
-Grid X
-<input id="gridX"
+Grid 회전
+<input
+id="gridRotation"
 type="range"
-min="0"
-max="800"
-value="300">
+min="-180"
+max="180"
+value="0">
 </label>
 
-<label>
-Grid Y
-<input id="gridY"
-type="range"
-min="0"
-max="800"
-value="300">
-</label>
+<p>
+Grid는 손가락으로 드래그
+</p>
 
 </div>
-
-<button onclick="analyze()">
-분석 시작
-</button>
-
-<div id="result"></div>
 
 <script>
 
@@ -126,6 +162,9 @@ let image = null;
 const imgScale =
 document.getElementById("imgScale");
 
+const imgRotation =
+document.getElementById("imgRotation");
+
 const imgX =
 document.getElementById("imgX");
 
@@ -135,238 +174,354 @@ document.getElementById("imgY");
 const gridSize =
 document.getElementById("gridSize");
 
-const gridX =
-document.getElementById("gridX");
+const gridRotation =
+document.getElementById("gridRotation");
 
-const gridY =
-document.getElementById("gridY");
+
+let gridCenterX =
+450;
+
+let gridCenterY =
+450;
 
 document
 .getElementById("fileInput")
-.addEventListener("change",e=>{
+.addEventListener(
+"change",
+e=>{
 
-    const file =
-    e.target.files[0];
+const file =
+e.target.files[0];
 
-    const img =
-    new Image();
+if(!file) return;
 
-    img.onload=()=>{
+const img =
+new Image();
 
-        image=img;
+img.onload=()=>{
 
-        draw();
-    };
+image=img;
 
-    img.src =
-    URL.createObjectURL(file);
+draw();
 
-});
+};
+
+img.src=
+URL.createObjectURL(file);
+
+}
+);
 
 [
 imgScale,
+imgRotation,
 imgX,
 imgY,
 gridSize,
-gridX,
-gridY
-].forEach(input=>{
+gridRotation
 
-    input.addEventListener(
-      "input",
-      draw
-    );
+].forEach(x=>{
+
+x.addEventListener(
+"input",
+draw
+);
 
 });
 
 function draw(){
 
-    ctx.clearRect(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
+ctx.clearRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
 
-    if(image){
+drawImage();
 
-        const scale =
-        parseFloat(
-          imgScale.value
-        );
+drawGrid();
 
-        const w =
-        image.width*scale;
+}
 
-        const h =
-        image.height*scale;
+function drawImage(){
 
-        ctx.drawImage(
+if(!image) return;
 
-            image,
+const scale =
+parseFloat(
+imgScale.value
+);
 
-            parseInt(
-              imgX.value
-            ),
+const angle =
+parseFloat(
+imgRotation.value
+)
+*
+Math.PI
+/
+180;
 
-            parseInt(
-              imgY.value
-            ),
+const w =
+image.width*scale;
 
-            w,
-            h
-        );
-    }
+const h =
+image.height*scale;
 
-    drawGrid();
+ctx.save();
+
+ctx.translate(
+
+canvas.width/2
++
+parseInt(imgX.value),
+
+canvas.height/2
++
+parseInt(imgY.value)
+
+);
+
+ctx.rotate(angle);
+
+ctx.drawImage(
+
+image,
+
+-w/2,
+
+-h/2,
+
+w,
+
+h
+
+);
+
+ctx.restore();
+
 }
 
 function drawGrid(){
 
-    const x=
-    parseInt(
-      gridX.value
-    );
+const size =
+parseInt(
+gridSize.value
+);
 
-    const y=
-    parseInt(
-      gridY.value
-    );
+const cell =
+size/5;
 
-    const size=
-    parseInt(
-      gridSize.value
-    );
+const angle =
+parseFloat(
+gridRotation.value
+)
+*
+Math.PI
+/
+180;
 
-    const cell=
-    size/5;
+ctx.save();
 
-    ctx.strokeStyle=
-      "cyan";
+ctx.translate(
+gridCenterX,
+gridCenterY
+);
 
-    ctx.lineWidth=
-      2;
+ctx.rotate(angle);
 
-    for(let i=0;i<=5;i++){
+ctx.strokeStyle=
+"cyan";
 
-        ctx.beginPath();
-        ctx.moveTo(
-          x+i*cell,
-          y
-        );
-        ctx.lineTo(
-          x+i*cell,
-          y+size
-        );
-        ctx.stroke();
+ctx.lineWidth=2;
 
-        ctx.beginPath();
-        ctx.moveTo(
-          x,
-          y+i*cell
-        );
-        ctx.lineTo(
-          x+size,
-          y+i*cell
-        );
-        ctx.stroke();
-    }
+for(let i=0;i<=5;i++){
 
-    ctx.strokeStyle=
-      "lime";
+ctx.beginPath();
 
-    ctx.lineWidth=
-      4;
+ctx.moveTo(
+-size/2 + cell*i,
+-size/2
+);
 
-    ctx.strokeRect(
-      x,
-      y,
-      size,
-      size
-    );
+ctx.lineTo(
+-size/2 + cell*i,
+size/2
+);
+
+ctx.stroke();
+
+ctx.beginPath();
+
+ctx.moveTo(
+-size/2,
+-size/2 + cell*i
+);
+
+ctx.lineTo(
+size/2,
+-size/2 + cell*i
+);
+
+ctx.stroke();
+
 }
 
-function analyze(){
+ctx.strokeStyle=
+"lime";
 
-    const roiX =
-    parseInt(
-      gridX.value
-    );
+ctx.lineWidth=4;
 
-    const roiY =
-    parseInt(
-      gridY.value
-    );
+ctx.strokeRect(
+-size/2,
+-size/2,
+size,
+size
+);
 
-    const size =
-    parseInt(
-      gridSize.value
-    );
+ctx.strokeStyle=
+"yellow";
 
-    let totalLoss=0;
+ctx.lineWidth=3;
 
-    for(let row=0;row<5;row++){
+ctx.beginPath();
+ctx.moveTo(
+-20,
+0
+);
+ctx.lineTo(
+20,
+0
+);
+ctx.stroke();
 
-        for(let col=0;col<5;col++){
+ctx.beginPath();
+ctx.moveTo(
+0,
+-20
+);
+ctx.lineTo(
+0,
+20
+);
+ctx.stroke();
 
-            const cellSize=
-            size/5;
+ctx.restore();
 
-            const data=
-            ctx.getImageData(
-
-              roiX+col*cellSize+5,
-
-              roiY+row*cellSize+5,
-
-              cellSize-10,
-
-              cellSize-10
-
-            );
-
-            let bright=0;
-
-            const pixels=
-              data.data.length/4;
-
-            for(
-              let i=0;
-              i<data.data.length;
-              i+=4
-            ){
-
-                const gray=
-                (
-                  data.data[i]+
-                  data.data[i+1]+
-                  data.data[i+2]
-                )/3;
-
-                if(gray>180){
-
-                    bright++;
-                }
-            }
-
-            totalLoss +=
-            (bright/pixels)*100;
-        }
-    }
-
-    const loss=
-    totalLoss/25;
-
-    document
-    .getElementById(
-      "result"
-    ).innerHTML=
-    `
-    Grid 정렬 완료<br>
-    평균 밝기율 :
-    ${loss.toFixed(1)} %
-    `;
 }
+
+let dragging=false;
+
+canvas.addEventListener(
+"touchstart",
+e=>{
+
+dragging=true;
+
+}
+);
+
+canvas.addEventListener(
+"touchend",
+e=>{
+
+dragging=false;
+
+}
+);
+
+canvas.addEventListener(
+"touchmove",
+e=>{
+
+if(!dragging) return;
+
+e.preventDefault();
+
+const rect =
+canvas.getBoundingClientRect();
+
+const touch =
+e.touches[0];
+
+gridCenterX =
+(
+touch.clientX
+-
+rect.left
+)
+*
+canvas.width
+/
+rect.width;
+
+gridCenterY =
+(
+touch.clientY
+-
+rect.top
+)
+*
+canvas.height
+/
+rect.height;
+
+draw();
+
+});
+
+canvas.addEventListener(
+"mousedown",
+()=>{
+
+dragging=true;
+
+}
+);
+
+canvas.addEventListener(
+"mouseup",
+()=>{
+
+dragging=false;
+
+}
+);
+
+canvas.addEventListener(
+"mousemove",
+e=>{
+
+if(!dragging) return;
+
+const rect =
+canvas.getBoundingClientRect();
+
+gridCenterX =
+(
+e.clientX
+-
+rect.left
+)
+*
+canvas.width
+/
+rect.width;
+
+gridCenterY =
+(
+e.clientY
+-
+rect.top
+)
+*
+canvas.height
+/
+rect.height;
+
+draw();
+
+});
 
 draw();
 
