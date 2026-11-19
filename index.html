@@ -2,47 +2,68 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>CrossCut Analyzer</title>
-
-<script async
-src="https://docs.opencv.org/4.x/opencv.js"></script>
 
 <style>
 
 body{
-    font-family:Arial;
-    text-align:center;
     background:#111;
     color:white;
+    font-family:Arial,sans-serif;
+    text-align:center;
+    margin:20px;
 }
 
-canvas{
-    max-width:90%;
-    border:1px solid #666;
-}
-
-#result{
-    margin-top:20px;
-    font-size:20px;
+h1{
+    font-size:42px;
 }
 
 input{
     margin:20px;
 }
 
+canvas{
+    max-width:95%;
+    border:1px solid #666;
+    margin-top:15px;
+}
+
+button{
+    margin-top:20px;
+    padding:12px 30px;
+    font-size:18px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+#result{
+    margin-top:20px;
+    font-size:22px;
+}
+
 </style>
 </head>
 <body>
 
-<h2>CrossCut Analyzer</h2>
+<h1>CrossCut Analyzer</h1>
 
-<input type="file" id="fileInput" accept="image/*">
+<input
+type="file"
+id="fileInput"
+accept="image/*">
 
 <br>
 
 <canvas id="canvas"></canvas>
+
+<br>
+
+<button id="analyzeBtn">
+분석하기
+</button>
 
 <div id="result">
 이미지를 선택하세요
@@ -50,46 +71,42 @@ input{
 
 <script>
 
+const fileInput =
+document.getElementById("fileInput");
+
 const canvas =
 document.getElementById("canvas");
 
 const ctx =
 canvas.getContext("2d");
 
-const resultDiv =
+const analyzeBtn =
+document.getElementById("analyzeBtn");
+
+const result =
 document.getElementById("result");
 
-let cvReady=false;
+let imageLoaded = false;
 
-cv['onRuntimeInitialized']=()=>{
+fileInput.addEventListener(
+"change",
+(event)=>{
 
-    cvReady=true;
+    const file =
+    event.target.files[0];
 
-    resultDiv.innerHTML=
-    "OpenCV Ready";
-};
+    if(!file) return;
 
-document
-.getElementById("fileInput")
-.addEventListener("change",(e)=>{
-
-    if(!cvReady){
-
-        alert("OpenCV 로딩중");
-
-        return;
-    }
-
-    const file=e.target.files[0];
-
-    if(!file)return;
-
-    const img=new Image();
+    const img =
+    new Image();
 
     img.onload=()=>{
 
-        canvas.width=img.width;
-        canvas.height=img.height;
+        canvas.width =
+        img.width;
+
+        canvas.height =
+        img.height;
 
         ctx.drawImage(
             img,
@@ -97,308 +114,97 @@ document
             0
         );
 
-        analyze();
+        imageLoaded=true;
 
+        result.innerHTML=
+        "이미지 로드 성공";
     };
 
     img.src=
-      URL.createObjectURL(file);
+    URL.createObjectURL(file);
 
 });
 
-function clusterLines(lines){
+analyzeBtn.addEventListener(
+"click",
+()=>{
 
-    lines.sort((a,b)=>a-b);
+    if(!imageLoaded){
 
-    const out=[];
-
-    lines.forEach(v=>{
-
-        if(
-          out.length===0 ||
-          Math.abs(
-             v-out[out.length-1]
-          )>15
-        ){
-            out.push(v);
-        }
-
-    });
-
-    return out;
-
-}
-
-function findBest6(lines){
-
-    if(lines.length<=6){
-
-        return lines;
-
-    }
-
-    const step=
-      (lines.length-1)/5;
-
-    let out=[];
-
-    for(let i=0;i<6;i++){
-
-        out.push(
-          Math.round(
-           lines[
-             Math.round(i*step)
-           ]
-          )
+        alert(
+        "먼저 이미지를 선택하세요"
         );
-
-    }
-
-    return out;
-
-}
-
-function analyze(){
-
-    let src=cv.imread(canvas);
-
-    let gray=new cv.Mat();
-
-    cv.cvtColor(
-       src,
-       gray,
-       cv.COLOR_RGBA2GRAY
-    );
-
-    let binary=new cv.Mat();
-
-    cv.threshold(
-      gray,
-      binary,
-      0,
-      255,
-      cv.THRESH_OTSU
-    );
-
-    let lines=new cv.Mat();
-
-    cv.HoughLinesP(
-      binary,
-      lines,
-      1,
-      Math.PI/180,
-      30,
-      30,
-      10
-    );
-
-    let vertical=[];
-    let horizontal=[];
-
-    for(let i=0;i<lines.rows;i++){
-
-        let idx=i*4;
-
-        let x1=
-          lines.data32S[idx];
-
-        let y1=
-          lines.data32S[idx+1];
-
-        let x2=
-          lines.data32S[idx+2];
-
-        let y2=
-          lines.data32S[idx+3];
-
-        let dx=
-          Math.abs(x2-x1);
-
-        let dy=
-          Math.abs(y2-y1);
-
-        if(dx<10 && dy>20){
-
-            vertical.push(
-              (x1+x2)/2
-            );
-        }
-
-        if(dy<10 && dx>20){
-
-            horizontal.push(
-              (y1+y2)/2
-            );
-        }
-    }
-
-    vertical=
-      clusterLines(vertical);
-
-    horizontal=
-      clusterLines(horizontal);
-
-    vertical=
-      findBest6(vertical);
-
-    horizontal=
-      findBest6(horizontal);
-
-    if(
-       vertical.length<6 ||
-       horizontal.length<6
-    ){
-
-        resultDiv.innerHTML=
-        "격자 검출 실패";
 
         return;
     }
 
-    ctx.lineWidth=2;
+    analyzeImage();
+});
 
-    ctx.strokeStyle="lime";
+function analyzeImage(){
 
-    vertical.forEach(x=>{
+    const imageData =
+    ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
-        ctx.beginPath();
+    const data =
+    imageData.data;
 
-        ctx.moveTo(x,0);
+    let brightPixels=0;
 
-        ctx.lineTo(
-          x,
-          canvas.height
-        );
+    let totalPixels=
+    data.length/4;
 
-        ctx.stroke();
-    });
+    for(
+        let i=0;
+        i<data.length;
+        i+=4
+    ){
 
-    horizontal.forEach(y=>{
+        const gray =
+        (
+          data[i] +
+          data[i+1] +
+          data[i+2]
+        ) / 3;
 
-        ctx.beginPath();
+        if(gray > 180){
 
-        ctx.moveTo(0,y);
-
-        ctx.lineTo(
-          canvas.width,
-          y
-        );
-
-        ctx.stroke();
-    });
-
-    let totalLoss=0;
-    let cells=0;
-
-    for(let r=0;r<5;r++){
-
-        for(let c=0;c<5;c++){
-
-            let x1=
-              vertical[c];
-
-            let x2=
-              vertical[c+1];
-
-            let y1=
-              horizontal[r];
-
-            let y2=
-              horizontal[r+1];
-
-            let mx=5;
-
-            let my=5;
-
-            let w=
-             (x2-x1)-mx*2;
-
-            let h=
-             (y2-y1)-my*2;
-
-            if(
-              w<5 ||
-              h<5
-            ){
-
-                continue;
-            }
-
-            let roi=
-             ctx.getImageData(
-               x1+mx,
-               y1+my,
-               w,
-               h
-             );
-
-            let bright=0;
-
-            let pixels=
-              roi.data.length/4;
-
-            for(
-              let i=0;
-              i<roi.data.length;
-              i+=4
-            ){
-
-                let g=
-                 (
-                   roi.data[i]+
-                   roi.data[i+1]+
-                   roi.data[i+2]
-                 )/3;
-
-                if(g>180){
-
-                    bright++;
-                }
-            }
-
-            let loss=
-              bright/pixels;
-
-            totalLoss+=loss;
-
-            cells++;
-
-            ctx.fillStyle=
-             loss>0.25
-             ? "rgba(255,0,0,0.35)"
-             : "rgba(0,255,0,0.2)";
-
-            ctx.fillRect(
-               x1,
-               y1,
-               x2-x1,
-               y2-y1
-            );
+            brightPixels++;
         }
     }
 
-    let avgLoss=
-      (totalLoss/cells)*100;
+    const delamination =
+    (brightPixels/totalPixels)
+    *100;
 
-    let astm="5B";
+    let ASTM="5B";
 
-    if(avgLoss>5) astm="4B";
-    if(avgLoss>15) astm="3B";
-    if(avgLoss>35) astm="2B";
-    if(avgLoss>65) astm="1B";
-    if(avgLoss>90) astm="0B";
+    if(delamination > 5)
+        ASTM="4B";
 
-    resultDiv.innerHTML=
+    if(delamination >15)
+        ASTM="3B";
+
+    if(delamination >35)
+        ASTM="2B";
+
+    if(delamination >65)
+        ASTM="1B";
+
+    if(delamination >90)
+        ASTM="0B";
+
+    result.innerHTML=
     `
-    ASTM : ${astm}<br>
-    박리율 : ${avgLoss.toFixed(1)} %<br>
-    Cells : ${cells}
+    ASTM 추정 : <b>${ASTM}</b><br>
+    밝은영역 비율 : ${delamination.toFixed(1)} %<br>
+    (현재는 테스트 버전)
     `;
-
-    src.delete();
-    gray.delete();
-    binary.delete();
-    lines.delete();
 }
 
 </script>
