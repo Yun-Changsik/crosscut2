@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>CrossCut Analyzer</title>
+<title>CrossCut Analyzer V3</title>
 
 <style>
 
@@ -27,12 +27,12 @@ input{
 canvas{
     max-width:95%;
     border:1px solid #666;
-    margin-top:15px;
+    margin-top:10px;
 }
 
 button{
-    margin-top:20px;
-    padding:12px 30px;
+    margin-top:15px;
+    padding:12px 24px;
     font-size:18px;
     border:none;
     border-radius:8px;
@@ -42,10 +42,12 @@ button{
 #result{
     margin-top:20px;
     font-size:22px;
+    line-height:1.6;
 }
 
 </style>
 </head>
+
 <body>
 
 <h1>CrossCut Analyzer</h1>
@@ -62,7 +64,7 @@ accept="image/*">
 <br>
 
 <button id="analyzeBtn">
-분석하기
+ROI + Grid 분석
 </button>
 
 <div id="result">
@@ -71,20 +73,20 @@ accept="image/*">
 
 <script>
 
-const fileInput =
-document.getElementById("fileInput");
-
 const canvas =
 document.getElementById("canvas");
 
 const ctx =
 canvas.getContext("2d");
 
-const analyzeBtn =
-document.getElementById("analyzeBtn");
-
 const result =
 document.getElementById("result");
+
+const fileInput =
+document.getElementById("fileInput");
+
+const analyzeBtn =
+document.getElementById("analyzeBtn");
 
 let imageLoaded = false;
 
@@ -100,7 +102,7 @@ fileInput.addEventListener(
     const img =
     new Image();
 
-    img.onload=()=>{
+    img.onload = ()=>{
 
         canvas.width =
         img.width;
@@ -116,11 +118,11 @@ fileInput.addEventListener(
 
         imageLoaded=true;
 
-        result.innerHTML=
-        "이미지 로드 성공";
+        result.innerHTML =
+        "이미지 로드 완료";
     };
 
-    img.src=
+    img.src =
     URL.createObjectURL(file);
 
 });
@@ -132,16 +134,17 @@ analyzeBtn.addEventListener(
     if(!imageLoaded){
 
         alert(
-        "먼저 이미지를 선택하세요"
+        "이미지를 먼저 선택하세요"
         );
 
         return;
     }
 
-    analyzeImage();
+    detectROI();
+
 });
 
-function analyzeImage(){
+function detectROI(){
 
     const imageData =
     ctx.getImageData(
@@ -154,57 +157,262 @@ function analyzeImage(){
     const data =
     imageData.data;
 
-    let brightPixels=0;
+    let minX = 999999;
+    let minY = 999999;
 
-    let totalPixels=
-    data.length/4;
+    let maxX = 0;
+    let maxY = 0;
+
+    let darkPixels = 0;
+
+    for(
+        let y=0;
+        y<canvas.height;
+        y+=2
+    ){
+
+        for(
+            let x=0;
+            x<canvas.width;
+            x+=2
+        ){
+
+            const idx =
+            (
+              y*canvas.width+x
+            )*4;
+
+            const gray =
+            (
+              data[idx] +
+              data[idx+1] +
+              data[idx+2]
+            )/3;
+
+            if(gray < 100){
+
+                darkPixels++;
+
+                if(x<minX) minX=x;
+                if(y<minY) minY=y;
+
+                if(x>maxX) maxX=x;
+                if(y>maxY) maxY=y;
+            }
+        }
+    }
+
+    if(darkPixels < 500){
+
+        result.innerHTML =
+        "ROI 검출 실패";
+
+        return;
+    }
+
+    const padding = 20;
+
+    minX =
+    Math.max(
+      minX-padding,
+      0
+    );
+
+    minY =
+    Math.max(
+      minY-padding,
+      0
+    );
+
+    maxX =
+    Math.min(
+      maxX+padding,
+      canvas.width
+    );
+
+    maxY =
+    Math.min(
+      maxY+padding,
+      canvas.height
+    );
+
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "lime";
+
+    ctx.strokeRect(
+      minX,
+      minY,
+      maxX-minX,
+      maxY-minY
+    );
+
+    drawGrid(
+      minX,
+      minY,
+      maxX,
+      maxY
+    );
+}
+
+function drawGrid(
+    minX,
+    minY,
+    maxX,
+    maxY
+){
+
+    const roiWidth =
+      maxX-minX;
+
+    const roiHeight =
+      maxY-minY;
+
+    const cellW =
+      roiWidth/5;
+
+    const cellH =
+      roiHeight/5;
+
+    let totalLoss = 0;
+    let totalCells = 0;
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "cyan";
+
+    for(let row=0;row<5;row++){
+
+        for(let col=0;col<5;col++){
+
+            const x =
+              minX +
+              col*cellW;
+
+            const y =
+              minY +
+              row*cellH;
+
+            const loss =
+            analyzeCell(
+              x,
+              y,
+              cellW,
+              cellH
+            );
+
+            totalLoss += loss;
+            totalCells++;
+
+            if(loss > 20){
+
+                ctx.fillStyle =
+                "rgba(255,0,0,0.35)";
+
+            }
+            else{
+
+                ctx.fillStyle =
+                "rgba(0,255,0,0.15)";
+            }
+
+            ctx.fillRect(
+              x,
+              y,
+              cellW,
+              cellH
+            );
+
+            ctx.strokeRect(
+              x,
+              y,
+              cellW,
+              cellH
+            );
+        }
+    }
+
+    const avgLoss =
+      totalLoss /
+      totalCells;
+
+    let astm = "5B";
+
+    if(avgLoss > 5)
+      astm = "4B";
+
+    if(avgLoss > 15)
+      astm = "3B";
+
+    if(avgLoss > 35)
+      astm = "2B";
+
+    if(avgLoss > 65)
+      astm = "1B";
+
+    if(avgLoss > 90)
+      astm = "0B";
+
+    result.innerHTML =
+    `
+    <b>ROI 검출 완료</b><br><br>
+
+    ASTM 추정 :
+    <b>${astm}</b><br>
+
+    평균 박리율 :
+    ${avgLoss.toFixed(1)} %<br>
+
+    Grid :
+    5 × 5 Cells
+    `;
+}
+
+function analyzeCell(
+    x,
+    y,
+    w,
+    h
+){
+
+    const margin = 5;
+
+    const roi =
+    ctx.getImageData(
+
+      x + margin,
+      y + margin,
+
+      w - margin*2,
+      h - margin*2
+
+    );
+
+    let bright = 0;
+
+    const pixels =
+    roi.data.length/4;
 
     for(
         let i=0;
-        i<data.length;
+        i<roi.data.length;
         i+=4
     ){
 
         const gray =
         (
-          data[i] +
-          data[i+1] +
-          data[i+2]
-        ) / 3;
+          roi.data[i] +
+          roi.data[i+1] +
+          roi.data[i+2]
+        )/3;
 
         if(gray > 180){
 
-            brightPixels++;
+            bright++;
         }
     }
 
-    const delamination =
-    (brightPixels/totalPixels)
-    *100;
-
-    let ASTM="5B";
-
-    if(delamination > 5)
-        ASTM="4B";
-
-    if(delamination >15)
-        ASTM="3B";
-
-    if(delamination >35)
-        ASTM="2B";
-
-    if(delamination >65)
-        ASTM="1B";
-
-    if(delamination >90)
-        ASTM="0B";
-
-    result.innerHTML=
-    `
-    ASTM 추정 : <b>${ASTM}</b><br>
-    밝은영역 비율 : ${delamination.toFixed(1)} %<br>
-    (현재는 테스트 버전)
-    `;
+    return (
+      bright / pixels
+    ) * 100;
 }
 
 </script>
