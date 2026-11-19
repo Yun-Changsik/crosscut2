@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>CrossCut Camera</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    overflow:hidden;
+    background:black;
+    font-family:Arial,sans-serif;
+}
+
+/* Camera */
+#camera{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+/* Title */
+#title{
+    position:absolute;
+    top:15px;
+    width:100%;
+    text-align:center;
+    color:white;
+    font-size:24px;
+    font-weight:bold;
+    z-index:20;
+}
+
+/* 5x5 Grid */
+#overlay{
+    position:absolute;
+
+    top:50%;
+    left:50%;
+
+    transform:translate(-50%,-50%);
+
+    width:70vw;
+    height:70vw;
+
+    max-width:500px;
+    max-height:500px;
+
+    border:3px solid lime;
+
+    display:grid;
+
+    grid-template-columns:repeat(5,1fr);
+    grid-template-rows:repeat(5,1fr);
+
+    z-index:10;
+    pointer-events:none;
+}
+
+.cell{
+    border:1px solid rgba(0,255,0,0.7);
+}
+
+/* Center Crosshair */
+
+#crosshair{
+    position:absolute;
+
+    width:40px;
+    height:40px;
+
+    top:50%;
+    left:50%;
+
+    transform:translate(-50%,-50%);
+
+    z-index:15;
+}
+
+#crosshair:before{
+    content:"";
+    position:absolute;
+
+    left:50%;
+    top:0;
+
+    width:2px;
+    height:100%;
+
+    background:red;
+}
+
+#crosshair:after{
+    content:"";
+    position:absolute;
+
+    top:50%;
+    left:0;
+
+    width:100%;
+    height:2px;
+
+    background:red;
+}
+
+/* Capture Button */
+
+#captureBtn{
+
+    position:absolute;
+
+    bottom:35px;
+    left:50%;
+
+    transform:translateX(-50%);
+
+    width:110px;
+    height:110px;
+
+    border-radius:50%;
+
+    border:none;
+
+    background:white;
+
+    font-size:18px;
+    font-weight:bold;
+
+    cursor:pointer;
+
+    z-index:20;
+}
+
+canvas{
+    display:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="title">
+CrossCut Camera
+</div>
+
+<video
+id="camera"
+autoplay
+playsinline>
+</video>
+
+<div id="crosshair"></div>
+
+<div id="overlay"></div>
+
+<button id="captureBtn">
+Capture
+</button>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+// Grid 생성
+
+const overlay=document.getElementById("overlay");
+
+for(let i=0;i<25;i++)
+{
+    const cell=document.createElement("div");
+    cell.className="cell";
+    overlay.appendChild(cell);
+}
+
+// Camera Start
+
+const video=document.getElementById("camera");
+
+async function startCamera()
+{
+    try
+    {
+        const stream=
+        await navigator.mediaDevices.getUserMedia({
+            video:{
+                facingMode:"environment"
+            }
+        });
+
+        video.srcObject=stream;
+    }
+    catch(error)
+    {
+        alert("Camera Access Failed");
+    }
+}
+
+startCamera();
+
+
+// Capture
+
+document
+.getElementById("captureBtn")
+.addEventListener("click",()=>{
+
+    const canvas=
+    document.getElementById("canvas");
+
+    canvas.width=
+    video.videoWidth;
+
+    canvas.height=
+    video.videoHeight;
+
+    const ctx=
+    canvas.getContext("2d");
+
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    const link=
+    document.createElement("a");
+
+    link.download=
+    `CrossCut_${Date.now()}.png`;
+
+    link.href=
+    canvas.toDataURL("image/png");
+
+    link.click();
+});
+
+</script>
+
+</body>
+</html>
