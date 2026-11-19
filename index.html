@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>CrossCut Alignment Tool</title>
 <style>
 html,body{
@@ -33,13 +33,20 @@ body{
     gap:6px;
 }
 canvas{
-    width:min(100%,42vh);
-    width:min(100%,42dvh);
-    aspect-ratio:1/1;
+    width:min(100%,calc(53vh));
+    width:min(100%,calc(53dvh));
+    aspect-ratio:4/3;
     height:auto;
     border:1px solid #666;
     touch-action:none;
     background:#000;
+    user-select:none;
+    -webkit-user-select:none;
+}
+.help{
+    margin:0;
+    font-size:12px;
+    color:#aaa;
 }
 #side{
     flex:1;
@@ -77,31 +84,26 @@ button{
     padding:8px 10px 12px;
     border-radius:10px;
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:6px 14px;
+    grid-template-columns:1fr;
+    gap:8px;
     text-align:left;
 }
 .panel h3{
-    grid-column:1 / -1;
     margin:6px 0 0;
     font-size:15px;
 }
-.panel .wide{
-    grid-column:1 / -1;
-}
-.panel .hint{
-    grid-column:1 / -1;
-    margin:0;
-    font-size:13px;
-    color:#aaa;
+.panel button{
+    font-size:14px;
+    padding:8px 12px;
+    justify-self:start;
 }
 label{
     display:block;
-    font-size:13px;
+    font-size:14px;
 }
 input[type=range]{
     width:100%;
-    margin:4px 0 0;
+    margin:6px 0 0;
 }
 
 /* 넓은 화면(가로/PC): 왼쪽에 사진, 오른쪽에 패널 */
@@ -110,8 +112,8 @@ input[type=range]{
         flex-direction:row;
     }
     #stage{
-        width:min(58vw,calc(100vh - 16px));
-        width:min(58vw,calc(100dvh - 16px));
+        width:min(62vw,calc((100vh - 40px) * 4 / 3));
+        width:min(62vw,calc((100dvh - 40px) * 4 / 3));
     }
     canvas{
         width:100%;
@@ -128,7 +130,8 @@ input[type=range]{
 
     <div id="stage">
         <input type="file" id="fileInput" accept="image/*">
-        <canvas id="canvas" width="900" height="900"></canvas>
+        <canvas id="canvas" width="1200" height="900"></canvas>
+        <p class="help">사진: 한 손가락 = 이동 / 두 손가락 = 확대·축소·회전</p>
     </div>
 
     <div id="side">
@@ -139,40 +142,33 @@ input[type=range]{
         </div>
 
         <div class="panel">
-            <h3>사진 조절</h3>
-
-            <label>사진 확대
-                <input id="imgScale" type="range" min="0.05" max="10" step="0.05" value="1">
-            </label>
-            <label>사진 회전
-                <input id="imgRotation" type="range" min="-180" max="180" value="0">
-            </label>
-            <label>사진 X
-                <input id="imgX" type="range" min="-1000" max="1000" value="0">
-            </label>
-            <label>사진 Y
-                <input id="imgY" type="range" min="-1000" max="1000" value="0">
-            </label>
-
             <h3>Grid 조절</h3>
 
-            <label>Grid 크기
-                <input id="gridSize" type="range" min="50" max="800" value="250">
+            <label>Grid 가로 폭: <span id="gridWVal">810</span>
+                <input id="gridWidth" type="range" min="200" max="1140" value="810">
             </label>
-            <label>Grid 회전
-                <input id="gridRotation" type="range" min="-180" max="180" value="0">
-            </label>
-            <p class="hint">Grid는 사진 위를 손가락(또는 마우스)으로 드래그</p>
 
             <h3>분석 기준</h3>
 
-            <label class="wide">밝기 기준 (이보다 밝으면 박리): <span id="thrVal">170</span>
+            <label>밝기 기준 (이보다 밝으면 박리): <span id="thrVal">170</span>
                 <input id="threshold" type="range" min="50" max="250" value="170">
             </label>
-            <label class="wide">
-                <input id="previewToggle" type="checkbox">
-                밝기 미리보기 항상 켜기 (슬라이더를 움직이는 동안은 자동으로 켜져요)
+
+            <label>절제선 두께 (이 두께 이하의 밝은 선은 박리에서 제외): <span id="lineVal">16</span>px
+                <input id="lineThick" type="range" min="0" max="60" value="16">
             </label>
+
+            <label>제외 띠 폭 (격자선 주변을 분석에서 빼는 폭): <span id="bandVal">8</span>px
+                <input id="bandWidth" type="range" min="0" max="40" value="8">
+            </label>
+
+            <label>
+                <input id="previewToggle" type="checkbox">
+                미리보기 항상 켜기 (마젠타 = 박리로 계산, 주황 = 절제선으로 보고 제외)
+            </label>
+
+            <h3>사진</h3>
+            <button id="resetImgBtn">사진 위치 초기화</button>
         </div>
 
     </div>
@@ -182,173 +178,187 @@ input[type=range]{
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-const imgScale = document.getElementById("imgScale");
-const imgRotation = document.getElementById("imgRotation");
-const imgX = document.getElementById("imgX");
-const imgY = document.getElementById("imgY");
-const gridSize = document.getElementById("gridSize");
-const gridRotation = document.getElementById("gridRotation");
+const gridWidth = document.getElementById("gridWidth");
+const gridWVal = document.getElementById("gridWVal");
 const threshold = document.getElementById("threshold");
 const thrVal = document.getElementById("thrVal");
 const resultEl = document.getElementById("result");
 const previewToggle = document.getElementById("previewToggle");
+const lineThick = document.getElementById("lineThick");
+const lineVal = document.getElementById("lineVal");
+const bandWidth = document.getElementById("bandWidth");
+const bandVal = document.getElementById("bandVal");
 
-let previewHold = false;   // 밝기 슬라이더를 누르고 있는 동안 true
+const CW = canvas.width;    // 1200
+const CH = canvas.height;   // 900
 
+// Grid는 화면 중앙에 고정. 높이는 화면의 90%, 가로 폭만 슬라이더로 조절
+const GRID_H = CH * 0.9;
+let gridW = parseFloat(gridWidth.value);
+
+// 사진 상태: 중심 좌표, 배율, 회전(라디안)
 let image = null;
-let gridCenterX = 450;
-let gridCenterY = 450;
+const img = { x: CW / 2, y: CH / 2, scale: 1, rot: 0 };
 
 // 분석 결과 셀 (null이면 오버레이 없음)
 let overlayCells = null;
 
+let previewHold = false;   // 밝기 슬라이더를 누르고 있는 동안 true
+
 /* ---------- 이미지 불러오기 ---------- */
+
+function fitImage() {
+    if (!image) return;
+    img.scale = Math.min(CW / image.width, CH / image.height);
+    img.x = CW / 2;
+    img.y = CH / 2;
+    img.rot = 0;
+}
 
 document.getElementById("fileInput").addEventListener("change", e => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const img = new Image();
-    img.onload = () => {
-        image = img;
+    const im = new Image();
+    im.onload = () => {
+        image = im;
+        fitImage();
         overlayCells = null;
         resultEl.textContent = "분석 전";
         draw();
-        URL.revokeObjectURL(img.src);
+        URL.revokeObjectURL(im.src);
     };
-    img.src = URL.createObjectURL(file);
+    im.src = URL.createObjectURL(file);
 });
 
-/* ---------- 슬라이더 ---------- */
-
-[imgScale, imgRotation, imgX, imgY, gridSize, gridRotation].forEach(el => {
-    el.addEventListener("input", () => {
-        overlayCells = null;   // 조정하면 이전 분석 결과는 무효
-        draw();
-    });
-});
-
-threshold.addEventListener("input", () => {
-    thrVal.textContent = threshold.value;
-    previewHold = true;
+document.getElementById("resetImgBtn").addEventListener("click", () => {
+    fitImage();
     overlayCells = null;
     draw();
 });
 
+/* ---------- 슬라이더 ---------- */
+
+gridWidth.addEventListener("input", () => {
+    gridW = parseFloat(gridWidth.value);
+    gridWVal.textContent = Math.round(gridW);
+    overlayCells = null;
+    requestDraw();
+});
+
+// 분석 기준 슬라이더: 움직이는 동안 미리보기를 자동으로 켠다
+function bindPreviewSlider(el, labelEl) {
+    el.addEventListener("input", () => {
+        labelEl.textContent = el.value;
+        previewHold = true;
+        overlayCells = null;
+        requestDraw();
+    });
+    ["pointerup", "pointercancel", "change", "touchend", "touchcancel", "blur"].forEach(type => {
+        el.addEventListener(type, endPreviewHold);
+    });
+}
+
 function endPreviewHold() {
     if (!previewHold) return;
     previewHold = false;
-    draw();
+    requestDraw();
 }
-["pointerup", "pointercancel", "change", "touchend", "touchcancel", "blur"].forEach(type => {
-    threshold.addEventListener(type, endPreviewHold);
-});
 
-previewToggle.addEventListener("change", draw);
+bindPreviewSlider(threshold, thrVal);
+bindPreviewSlider(lineThick, lineVal);
+bindPreviewSlider(bandWidth, bandVal);
+
+previewToggle.addEventListener("change", requestDraw);
 
 /* ---------- 그리기 ---------- */
 
 function drawImageOnly() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, CW, CH);
     if (!image) return;
 
-    const scale = parseFloat(imgScale.value);
-    const angle = parseFloat(imgRotation.value) * Math.PI / 180;
-    const w = image.width * scale;
-    const h = image.height * scale;
+    const w = image.width * img.scale;
+    const h = image.height * img.scale;
 
     ctx.save();
-    ctx.translate(
-        canvas.width / 2 + parseInt(imgX.value),
-        canvas.height / 2 + parseInt(imgY.value)
-    );
-    ctx.rotate(angle);
+    ctx.translate(img.x, img.y);
+    ctx.rotate(img.rot);
     ctx.drawImage(image, -w / 2, -h / 2, w, h);
     ctx.restore();
 }
 
-function drawGrid() {
-    const size = parseInt(gridSize.value);
-    const cell = size / 5;
-    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
+function gridRect() {
+    return {
+        x: (CW - gridW) / 2,
+        y: (CH - GRID_H) / 2,
+        w: gridW,
+        h: GRID_H
+    };
+}
 
-    ctx.save();
-    ctx.translate(gridCenterX, gridCenterY);
-    ctx.rotate(angle);
+function drawGrid() {
+    const g = gridRect();
+    const cw = g.w / 5;
+    const ch = g.h / 5;
+
+    // 분석에서 제외되는 띠 (격자선 주변)
+    const band = parseFloat(bandWidth.value);
+    if (band > 0) {
+        ctx.fillStyle = "rgba(255,220,0,0.28)";
+        for (let i = 0; i <= 5; i++) {
+            ctx.fillRect(g.x + cw * i - band / 2, g.y, band, g.h);
+            ctx.fillRect(g.x, g.y + ch * i - band / 2, g.w, band);
+        }
+    }
 
     ctx.strokeStyle = "cyan";
     ctx.lineWidth = 2;
     for (let i = 0; i <= 5; i++) {
         ctx.beginPath();
-        ctx.moveTo(-size / 2 + cell * i, -size / 2);
-        ctx.lineTo(-size / 2 + cell * i, size / 2);
+        ctx.moveTo(g.x + cw * i, g.y);
+        ctx.lineTo(g.x + cw * i, g.y + g.h);
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.moveTo(-size / 2, -size / 2 + cell * i);
-        ctx.lineTo(size / 2, -size / 2 + cell * i);
+        ctx.moveTo(g.x, g.y + ch * i);
+        ctx.lineTo(g.x + g.w, g.y + ch * i);
         ctx.stroke();
     }
 
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 4;
-    ctx.strokeRect(-size / 2, -size / 2, size, size);
+    ctx.strokeRect(g.x, g.y, g.w, g.h);
 
     ctx.strokeStyle = "yellow";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(20, 0);
+    ctx.moveTo(CW / 2 - 20, CH / 2);
+    ctx.lineTo(CW / 2 + 20, CH / 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(0, -20);
-    ctx.lineTo(0, 20);
+    ctx.moveTo(CW / 2, CH / 2 - 20);
+    ctx.lineTo(CW / 2, CH / 2 + 20);
     ctx.stroke();
-
-    ctx.restore();
 }
 
 function drawOverlay() {
     if (!overlayCells) return;
-
-    const size = parseInt(gridSize.value);
-    const cellSize = size / 5;
-    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
-
-    ctx.save();
-    ctx.translate(gridCenterX, gridCenterY);
-    ctx.rotate(angle);
-
     overlayCells.forEach(c => {
         ctx.fillStyle = c.failed
             ? "rgba(255,0,0,0.45)"
             : "rgba(0,255,0,0.25)";
-        ctx.fillRect(c.localX, c.localY, cellSize, cellSize);
+        ctx.fillRect(c.x, c.y, c.w, c.h);
     });
-
-    ctx.restore();
 }
 
-// 기준값보다 밝은 픽셀을 마젠타색으로 표시 (분석에는 영향 없음, 화면 표시용)
-function drawThresholdPreview() {
-    if (!image) return;
-    let frame;
-    try {
-        frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    } catch (err) {
-        return;
-    }
-    const d = frame.data;
-    const thr = parseFloat(threshold.value);
-    for (let i = 0; i < d.length; i += 4) {
-        const gray = (d[i] + d[i + 1] + d[i + 2]) / 3;
-        if (gray > thr && d[i + 3] > 0) {
-            d[i] = 255;
-            d[i + 1] = 0;
-            d[i + 2] = 200;
-        }
-    }
-    ctx.putImageData(frame, 0, 0);
+let drawQueued = false;
+function requestDraw() {
+    if (drawQueued) return;
+    drawQueued = true;
+    requestAnimationFrame(() => {
+        drawQueued = false;
+        draw();
+    });
 }
 
 function draw() {
@@ -370,77 +380,182 @@ function gradeFromLoss(loss) {
     return "0B";                    // 65% 초과
 }
 
+/* ----- 절제선 제외 처리 -----
+   1) 밝기 기준을 넘는 픽셀로 마스크를 만든다
+   2) 모폴로지 "열림"(침식 -> 팽창)으로 절제선 두께 이하의 얇은 선을 지운다
+   3) 격자선 주변 띠(제외 띠 폭)를 분석에서 뺀다 */
+
+function morphBox(src, w, h, r, erode) {
+    const W = w + 1;
+    const ii = new Int32Array(W * (h + 1));
+    for (let y = 0; y < h; y++) {
+        let rowSum = 0;
+        for (let x = 0; x < w; x++) {
+            rowSum += src[y * w + x];
+            ii[(y + 1) * W + x + 1] = ii[y * W + x + 1] + rowSum;
+        }
+    }
+    const out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+        const y0 = Math.max(0, y - r);
+        const y1 = Math.min(h, y + r + 1);
+        for (let x = 0; x < w; x++) {
+            const x0 = Math.max(0, x - r);
+            const x1 = Math.min(w, x + r + 1);
+            const sum = ii[y1 * W + x1] - ii[y0 * W + x1] - ii[y1 * W + x0] + ii[y0 * W + x0];
+            if (erode) {
+                out[y * w + x] = sum === (x1 - x0) * (y1 - y0) ? 1 : 0;
+            } else {
+                out[y * w + x] = sum > 0 ? 1 : 0;
+            }
+        }
+    }
+    return out;
+}
+
+// 캔버스에 사진만 그려진 상태에서 호출해야 한다
+function computeMasks() {
+    const g = gridRect();
+    const thr = parseFloat(threshold.value);
+    const r = Math.floor(parseInt(lineThick.value) / 2);
+    const band = parseFloat(bandWidth.value);
+    const pad = r + 1;
+
+    const gx0 = Math.max(0, Math.round(g.x));
+    const gy0 = Math.max(0, Math.round(g.y));
+    const gx1 = Math.min(CW, Math.round(g.x + g.w));
+    const gy1 = Math.min(CH, Math.round(g.y + g.h));
+
+    const rx0 = Math.max(0, gx0 - pad);
+    const ry0 = Math.max(0, gy0 - pad);
+    const rx1 = Math.min(CW, gx1 + pad);
+    const ry1 = Math.min(CH, gy1 + pad);
+    const w = rx1 - rx0;
+    const h = ry1 - ry0;
+
+    const frame = ctx.getImageData(rx0, ry0, w, h);
+    const d = frame.data;
+
+    const raw = new Uint8Array(w * h);
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+        const gray = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        raw[p] = gray > thr ? 1 : 0;
+    }
+
+    // 얇은 선 제거 (열림 연산)
+    let opened = raw;
+    if (r > 0) {
+        opened = morphBox(morphBox(raw, w, h, r, true), w, h, r, false);
+    }
+
+    // 격자선 주변 제외 띠
+    const exclX = new Uint8Array(CW);
+    const exclY = new Uint8Array(CH);
+    if (band > 0) {
+        const cw = g.w / 5;
+        const ch = g.h / 5;
+        for (let i = 0; i <= 5; i++) {
+            const lx = g.x + cw * i;
+            const ly = g.y + ch * i;
+            for (let x = Math.max(0, Math.floor(lx - band / 2) - 1); x <= Math.min(CW - 1, Math.ceil(lx + band / 2) + 1); x++) {
+                if (Math.abs(x + 0.5 - lx) <= band / 2) exclX[x] = 1;
+            }
+            for (let y = Math.max(0, Math.floor(ly - band / 2) - 1); y <= Math.min(CH - 1, Math.ceil(ly + band / 2) + 1); y++) {
+                if (Math.abs(y + 0.5 - ly) <= band / 2) exclY[y] = 1;
+            }
+        }
+    }
+
+    return { g, frame, raw, opened, exclX, exclY, rx0, ry0, w, gx0, gy0, gx1, gy1 };
+}
+
+// 기준값보다 밝은 픽셀 표시 (화면 표시용, 분석 결과에는 영향 없음)
+// 마젠타 = 박리로 계산되는 픽셀 / 주황 = 밝지만 절제선(또는 제외 띠)으로 보고 제외되는 픽셀
+function drawThresholdPreview() {
+    if (!image) return;
+    let m;
+    try {
+        m = computeMasks();
+    } catch (err) {
+        return;
+    }
+    const d = m.frame.data;
+
+    for (let py = m.gy0; py < m.gy1; py++) {
+        for (let px = m.gx0; px < m.gx1; px++) {
+            const p = (py - m.ry0) * m.w + (px - m.rx0);
+            if (!m.raw[p]) continue;
+            const i = p * 4;
+            const excluded = m.exclX[px] || m.exclY[py];
+            if (m.opened[p] && !excluded) {
+                d[i] = 255; d[i + 1] = 0; d[i + 2] = 200;      // 박리로 계산
+            } else {
+                d[i] = 255; d[i + 1] = 160; d[i + 2] = 0;      // 제외
+            }
+        }
+    }
+    ctx.putImageData(m.frame, m.rx0, m.ry0);
+}
+
 function analyzeCrossCut() {
     if (!image) {
         resultEl.textContent = "먼저 사진을 올려주세요";
         return;
     }
 
-    // 격자선/오버레이 없이 사진만 그린 상태에서 픽셀을 읽는다
+    // 격자선/오버레이/미리보기 없이 사진만 그린 상태에서 픽셀을 읽는다
     drawImageOnly();
 
-    const size = parseFloat(gridSize.value);
-    const cellSize = size / 5;
-    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-    const thr = parseFloat(threshold.value);
-    const inspectSize = Math.max(Math.round(cellSize * 0.4), 10);
+    let m;
+    try {
+        m = computeMasks();
+    } catch (err) {
+        resultEl.textContent = "이미지를 읽을 수 없어요";
+        return;
+    }
 
-    const cells = [];
-    let failedCells = 0;
-    let totalLoss = 0;
+    const g = m.g;
+    const cellW = g.w / 5;
+    const cellH = g.h / 5;
 
-    for (let row = 0; row < 5; row++) {
-        for (let col = 0; col < 5; col++) {
-            const localX = -size / 2 + col * cellSize;
-            const localY = -size / 2 + row * cellSize;
-            const cx = localX + cellSize / 2;
-            const cy = localY + cellSize / 2;
+    const valid = new Array(25).fill(0);
+    const bright = new Array(25).fill(0);
 
-            const worldX = gridCenterX + cx * cosA - cy * sinA;
-            const worldY = gridCenterY + cx * sinA + cy * cosA;
-
-            // 캔버스 밖으로 나가는 영역은 잘라냄
-            let x0 = Math.round(worldX - inspectSize / 2);
-            let y0 = Math.round(worldY - inspectSize / 2);
-            let x1 = x0 + inspectSize;
-            let y1 = y0 + inspectSize;
-            x0 = Math.max(0, x0);
-            y0 = Math.max(0, y0);
-            x1 = Math.min(canvas.width, x1);
-            y1 = Math.min(canvas.height, y1);
-
-            if (x1 <= x0 || y1 <= y0) {
-                cells.push({ localX, localY, failed: false });
-                continue;
-            }
-
-            let data;
-            try {
-                data = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data;
-            } catch (err) {
-                cells.push({ localX, localY, failed: false });
-                continue;
-            }
-
-            let bright = 0;
-            const pixels = data.length / 4;
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                if (gray > thr) bright++;
-            }
-
-            const loss = (bright / pixels) * 100;
-            totalLoss += loss;
-
-            const failed = loss > 20;
-            if (failed) failedCells++;
-            cells.push({ localX, localY, failed });
+    for (let py = m.gy0; py < m.gy1; py++) {
+        const row = Math.min(4, Math.max(0, Math.floor((py + 0.5 - g.y) / cellH)));
+        for (let px = m.gx0; px < m.gx1; px++) {
+            if (m.exclX[px] || m.exclY[py]) continue;   // 제외 띠
+            const col = Math.min(4, Math.max(0, Math.floor((px + 0.5 - g.x) / cellW)));
+            const idx = row * 5 + col;
+            valid[idx]++;
+            if (m.opened[(py - m.ry0) * m.w + (px - m.rx0)]) bright[idx]++;
         }
     }
 
-    const averageLoss = totalLoss / 25;
+    const cells = [];
+    let failedCells = 0;
+    let totalValid = 0;
+    let totalBright = 0;
+
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+            const idx = row * 5 + col;
+            const loss = valid[idx] > 0 ? (bright[idx] / valid[idx]) * 100 : 0;
+            const failed = loss > 20;
+            if (failed) failedCells++;
+            totalValid += valid[idx];
+            totalBright += bright[idx];
+            cells.push({
+                x: g.x + col * cellW,
+                y: g.y + row * cellH,
+                w: cellW,
+                h: cellH,
+                failed
+            });
+        }
+    }
+
+    const averageLoss = totalValid > 0 ? (totalBright / totalValid) * 100 : 0;
     const retention = 100 - averageLoss;
     const astm = gradeFromLoss(averageLoss);
 
@@ -456,32 +571,95 @@ function analyzeCrossCut() {
 
 document.getElementById("analyzeBtn").addEventListener("click", analyzeCrossCut);
 
-/* ---------- Grid 드래그 (마우스/터치 공통) ---------- */
+/* ---------- 사진 제스처 (한 손가락 이동 / 두 손가락 확대·축소·회전) ---------- */
 
-let dragging = false;
-
-function moveGridTo(clientX, clientY) {
+function toCanvas(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    gridCenterX = (clientX - rect.left) * canvas.width / rect.width;
-    gridCenterY = (clientY - rect.top) * canvas.height / rect.height;
-    overlayCells = null;
-    draw();
+    return {
+        x: (clientX - rect.left) * CW / rect.width,
+        y: (clientY - rect.top) * CH / rect.height
+    };
 }
 
+// 이전 기준점(pm)이 현재 기준점(cm)으로 가도록 사진을 이동/확대/회전
+function applyGesture(pm, cm, s, dTheta) {
+    if (!image) return;
+
+    const newScale = Math.min(30, Math.max(0.02, img.scale * s));
+    s = newScale / img.scale;
+
+    const cos = Math.cos(dTheta);
+    const sin = Math.sin(dTheta);
+    const dx = img.x - pm.x;
+    const dy = img.y - pm.y;
+
+    img.x = cm.x + (dx * cos - dy * sin) * s;
+    img.y = cm.y + (dx * sin + dy * cos) * s;
+    img.rot += dTheta;
+    img.scale = newScale;
+}
+
+const pointers = new Map();   // pointerId -> {x, y} (캔버스 좌표)
+
 canvas.addEventListener("pointerdown", e => {
-    dragging = true;
     canvas.setPointerCapture(e.pointerId);
-    moveGridTo(e.clientX, e.clientY);
+    pointers.set(e.pointerId, toCanvas(e.clientX, e.clientY));
 });
 
 canvas.addEventListener("pointermove", e => {
-    if (!dragging) return;
-    moveGridTo(e.clientX, e.clientY);
+    if (!pointers.has(e.pointerId)) return;
+
+    const prev = Array.from(pointers.values());
+    pointers.set(e.pointerId, toCanvas(e.clientX, e.clientY));
+    const cur = Array.from(pointers.values());
+
+    if (cur.length === 1) {
+        applyGesture(prev[0], cur[0], 1, 0);
+    } else {
+        const pa = prev[0], pb = prev[1];
+        const ca = cur[0], cb = cur[1];
+
+        const prevDist = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+        const curDist = Math.hypot(cb.x - ca.x, cb.y - ca.y);
+        const s = prevDist > 0 ? curDist / prevDist : 1;
+
+        const prevAng = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+        const curAng = Math.atan2(cb.y - ca.y, cb.x - ca.x);
+        let dTheta = curAng - prevAng;
+        if (dTheta > Math.PI) dTheta -= 2 * Math.PI;
+        if (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+
+        const pm = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+        const cm = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
+
+        applyGesture(pm, cm, s, dTheta);
+    }
+
+    overlayCells = null;
+    requestDraw();
 });
 
 ["pointerup", "pointercancel"].forEach(type => {
-    canvas.addEventListener(type, () => { dragging = false; });
+    canvas.addEventListener(type, e => {
+        pointers.delete(e.pointerId);
+    });
 });
+
+// PC: 휠 = 확대/축소, Shift+휠 = 회전
+canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const p = toCanvas(e.clientX, e.clientY);
+    const delta = e.deltaY || e.deltaX;
+
+    if (e.shiftKey) {
+        applyGesture(p, p, 1, -delta * 0.002);
+    } else {
+        applyGesture(p, p, Math.exp(-delta * 0.0015), 0);
+    }
+
+    overlayCells = null;
+    requestDraw();
+}, { passive: false });
 
 draw();
 </script>
