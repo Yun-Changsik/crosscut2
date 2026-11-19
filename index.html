@@ -148,7 +148,19 @@ Grid는 손가락으로 드래그
 </p>
 
 </div>
+<button id="analyzeBtn">
+분석 시작
+</button>
 
+<div id="result"
+style="
+margin-top:20px;
+font-size:22px;
+font-weight:bold;
+color:white;
+">
+분석 전
+</div>
 <script>
 
 const canvas =
@@ -201,7 +213,236 @@ new Image();
 img.onload=()=>{
 
 image=img;
+document
+.getElementById("analyzeBtn")
+.addEventListener(
+    "click",
+    analyzeCrossCut
+);
 
+function analyzeCrossCut(){
+
+    draw();
+
+    const size =
+    parseFloat(gridSize.value);
+
+    const cellSize =
+    size / 5;
+
+    const angle =
+    parseFloat(gridRotation.value)
+    *
+    Math.PI
+    /
+    180;
+
+    let failedCells = 0;
+    let totalLoss = 0;
+
+    for(let row=0; row<5; row++){
+
+        for(let col=0; col<5; col++){
+
+            const localX =
+            -size/2 +
+            col*cellSize;
+
+            const localY =
+            -size/2 +
+            row*cellSize;
+
+            const centerX =
+            localX +
+            cellSize/2;
+
+            const centerY =
+            localY +
+            cellSize/2;
+
+            const worldX =
+            gridCenterX +
+            (
+              centerX *
+              Math.cos(angle)
+            ) -
+            (
+              centerY *
+              Math.sin(angle)
+            );
+
+            const worldY =
+            gridCenterY +
+            (
+              centerX *
+              Math.sin(angle)
+            ) +
+            (
+              centerY *
+              Math.cos(angle)
+            );
+
+            const inspectSize =
+            Math.max(
+              cellSize * 0.4,
+              10
+            );
+
+            let imageData;
+
+            try{
+
+                imageData =
+                ctx.getImageData(
+
+                    worldX -
+                    inspectSize/2,
+
+                    worldY -
+                    inspectSize/2,
+
+                    inspectSize,
+
+                    inspectSize
+
+                );
+
+            }
+            catch{
+
+                continue;
+
+            }
+
+            let brightPixels = 0;
+
+            const pixels =
+            imageData.data.length / 4;
+
+            for(
+                let i=0;
+                i<imageData.data.length;
+                i+=4
+            ){
+
+                const gray =
+                (
+                    imageData.data[i]
+                    +
+                    imageData.data[i+1]
+                    +
+                    imageData.data[i+2]
+                ) / 3;
+
+                if(gray > 170){
+
+                    brightPixels++;
+
+                }
+            }
+
+            const loss =
+            (
+              brightPixels /
+              pixels
+            ) * 100;
+
+            totalLoss += loss;
+
+            if(loss > 20){
+
+                failedCells++;
+
+                paintCell(
+                    localX,
+                    localY,
+                    cellSize,
+                    angle,
+                    "rgba(255,0,0,0.45)"
+                );
+
+            }
+            else{
+
+                paintCell(
+                    localX,
+                    localY,
+                    cellSize,
+                    angle,
+                    "rgba(0,255,0,0.25)"
+                );
+
+            }
+        }
+    }
+
+    const averageLoss =
+    totalLoss / 25;
+
+    const retention =
+    100 - averageLoss;
+
+    let astm="0B";
+
+    if(retention >= 95) astm="5B";
+    else if(retention >= 85) astm="4B";
+    else if(retention >= 65) astm="3B";
+    else if(retention >= 35) astm="2B";
+    else if(retention >= 10) astm="1B";
+
+    document
+    .getElementById("result")
+    .innerHTML =
+
+    `
+    ASTM : <b>${astm}</b>
+
+    <br><br>
+
+    Retention :
+    ${retention.toFixed(1)} %
+
+    <br><br>
+
+    Loss :
+    ${averageLoss.toFixed(1)} %
+
+    <br><br>
+
+    Failed Cells :
+    ${failedCells} / 25
+    `;
+}
+
+function paintCell(
+    localX,
+    localY,
+    cellSize,
+    angle,
+    color
+){
+
+    ctx.save();
+
+    ctx.translate(
+        gridCenterX,
+        gridCenterY
+    );
+
+    ctx.rotate(angle);
+
+    ctx.fillStyle =
+    color;
+
+    ctx.fillRect(
+        localX,
+        localY,
+        cellSize,
+        cellSize
+    );
+
+    ctx.restore();
+}
 draw();
 
 };
