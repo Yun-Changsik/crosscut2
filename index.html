@@ -2,770 +2,444 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width,initial-scale=1">
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CrossCut Alignment Tool</title>
-
 <style>
-
+html,body{
+    height:100%;
+}
 body{
     background:#111;
     color:white;
     font-family:Arial,sans-serif;
     margin:0;
-    padding:10px;
-    text-align:center;
+    padding:8px;
+    box-sizing:border-box;
+    overflow:hidden;
 }
 
+/* 기본(세로 화면): 위에 사진, 아래에 패널. 사진은 항상 화면에 고정 */
+#app{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    gap:8px;
+}
+#stage{
+    flex:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+}
 canvas{
-    width:95vw;
-    max-width:900px;
+    width:min(100%,42vh);
+    width:min(100%,42dvh);
+    aspect-ratio:1/1;
+    height:auto;
     border:1px solid #666;
     touch-action:none;
     background:#000;
 }
+#side{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+}
+
+.actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:#222;
+    border-radius:10px;
+    padding:8px 10px;
+    position:sticky;
+    top:0;
+    z-index:1;
+}
+button{
+    padding:10px 16px;
+    font-size:17px;
+    flex:none;
+}
+#result{
+    font-size:15px;
+    font-weight:bold;
+    line-height:1.4;
+    text-align:left;
+}
 
 .panel{
-
-    width:95vw;
-    max-width:900px;
-
-    margin:auto;
-    margin-top:10px;
-
+    margin-top:8px;
     background:#222;
-    padding:10px;
-
+    padding:8px 10px 12px;
     border-radius:10px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px 14px;
+    text-align:left;
 }
-
+.panel h3{
+    grid-column:1 / -1;
+    margin:6px 0 0;
+    font-size:15px;
+}
+.panel .wide{
+    grid-column:1 / -1;
+}
+.panel .hint{
+    grid-column:1 / -1;
+    margin:0;
+    font-size:13px;
+    color:#aaa;
+}
 label{
     display:block;
-    margin-top:10px;
+    font-size:13px;
 }
-
 input[type=range]{
-    width:90%;
+    width:100%;
+    margin:4px 0 0;
 }
 
-button{
-    margin-top:15px;
-    padding:10px 20px;
-    font-size:18px;
+/* 넓은 화면(가로/PC): 왼쪽에 사진, 오른쪽에 패널 */
+@media (min-width:800px) and (orientation:landscape){
+    #app{
+        flex-direction:row;
+    }
+    #stage{
+        width:min(58vw,calc(100vh - 16px));
+        width:min(58vw,calc(100dvh - 16px));
+    }
+    canvas{
+        width:100%;
+    }
+    #side{
+        padding-right:4px;
+    }
 }
-
 </style>
 </head>
 <body>
 
-<h2>CrossCut Alignment Tool</h2>
+<div id="app">
 
-<input
-type="file"
-id="fileInput"
-accept="image/*">
+    <div id="stage">
+        <input type="file" id="fileInput" accept="image/*">
+        <canvas id="canvas" width="900" height="900"></canvas>
+    </div>
 
-<br><br>
+    <div id="side">
 
-<canvas
-id="canvas"
-width="900"
-height="900">
-</canvas>
+        <div class="actions">
+            <button id="analyzeBtn">분석 시작</button>
+            <div id="result">분석 전</div>
+        </div>
 
-<div class="panel">
+        <div class="panel">
+            <h3>사진 조절</h3>
 
-<h3>사진 조절</h3>
+            <label>사진 확대
+                <input id="imgScale" type="range" min="0.05" max="10" step="0.05" value="1">
+            </label>
+            <label>사진 회전
+                <input id="imgRotation" type="range" min="-180" max="180" value="0">
+            </label>
+            <label>사진 X
+                <input id="imgX" type="range" min="-1000" max="1000" value="0">
+            </label>
+            <label>사진 Y
+                <input id="imgY" type="range" min="-1000" max="1000" value="0">
+            </label>
 
-<label>
-사진 확대
-<input
-id="imgScale"
-type="range"
-min="0.2"
-max="10"
-step="0.05"
-value="1">
-</label>
+            <h3>Grid 조절</h3>
 
-<label>
-사진 회전
-<input
-id="imgRotation"
-type="range"
-min="-180"
-max="180"
-value="0">
-</label>
+            <label>Grid 크기
+                <input id="gridSize" type="range" min="50" max="800" value="250">
+            </label>
+            <label>Grid 회전
+                <input id="gridRotation" type="range" min="-180" max="180" value="0">
+            </label>
+            <p class="hint">Grid는 사진 위를 손가락(또는 마우스)으로 드래그</p>
 
-<label>
-사진 X
-<input
-id="imgX"
-type="range"
-min="-1000"
-max="1000"
-value="0">
-</label>
+            <h3>분석 기준</h3>
 
-<label>
-사진 Y
-<input
-id="imgY"
-type="range"
-min="-1000"
-max="1000"
-value="0">
-</label>
+            <label class="wide">밝기 기준 (이보다 밝으면 박리): <span id="thrVal">170</span>
+                <input id="threshold" type="range" min="50" max="250" value="170">
+            </label>
+        </div>
 
-<hr>
-
-<h3>Grid 조절</h3>
-
-<label>
-Grid 크기
-<input
-id="gridSize"
-type="range"
-min="50"
-max="800"
-value="250">
-</label>
-
-<label>
-Grid 회전
-<input
-id="gridRotation"
-type="range"
-min="-180"
-max="180"
-value="0">
-</label>
-
-<p>
-Grid는 손가락으로 드래그
-</p>
-
+    </div>
 </div>
-<button id="analyzeBtn">
-분석 시작
-</button>
 
-<div id="result"
-style="
-margin-top:20px;
-font-size:22px;
-font-weight:bold;
-color:white;
-">
-분석 전
-</div>
 <script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-const canvas =
-document.getElementById("canvas");
-
-const ctx =
-canvas.getContext("2d");
+const imgScale = document.getElementById("imgScale");
+const imgRotation = document.getElementById("imgRotation");
+const imgX = document.getElementById("imgX");
+const imgY = document.getElementById("imgY");
+const gridSize = document.getElementById("gridSize");
+const gridRotation = document.getElementById("gridRotation");
+const threshold = document.getElementById("threshold");
+const thrVal = document.getElementById("thrVal");
+const resultEl = document.getElementById("result");
 
 let image = null;
-
-const imgScale =
-document.getElementById("imgScale");
-
-const imgRotation =
-document.getElementById("imgRotation");
-
-const imgX =
-document.getElementById("imgX");
-
-const imgY =
-document.getElementById("imgY");
-
-const gridSize =
-document.getElementById("gridSize");
-
-const gridRotation =
-document.getElementById("gridRotation");
-
-
-let gridCenterX =
-450;
-
-let gridCenterY =
-450;
-
-document
-.getElementById("fileInput")
-.addEventListener(
-"change",
-e=>{
-
-const file =
-e.target.files[0];
-
-if(!file) return;
-
-const img =
-new Image();
-
-img.onload=()=>{
-
-image=img;
-document
-.getElementById("analyzeBtn")
-.addEventListener(
-    "click",
-    analyzeCrossCut
-);
-
-function analyzeCrossCut(){
-
-    draw();
-
-    const size =
-    parseFloat(gridSize.value);
-
-    const cellSize =
-    size / 5;
-
-    const angle =
-    parseFloat(gridRotation.value)
-    *
-    Math.PI
-    /
-    180;
-
-    let failedCells = 0;
-    let totalLoss = 0;
-
-    for(let row=0; row<5; row++){
-
-        for(let col=0; col<5; col++){
-
-            const localX =
-            -size/2 +
-            col*cellSize;
-
-            const localY =
-            -size/2 +
-            row*cellSize;
-
-            const centerX =
-            localX +
-            cellSize/2;
-
-            const centerY =
-            localY +
-            cellSize/2;
-
-            const worldX =
-            gridCenterX +
-            (
-              centerX *
-              Math.cos(angle)
-            ) -
-            (
-              centerY *
-              Math.sin(angle)
-            );
-
-            const worldY =
-            gridCenterY +
-            (
-              centerX *
-              Math.sin(angle)
-            ) +
-            (
-              centerY *
-              Math.cos(angle)
-            );
-
-            const inspectSize =
-            Math.max(
-              cellSize * 0.4,
-              10
-            );
-
-            let imageData;
-
-            try{
-
-                imageData =
-                ctx.getImageData(
-
-                    worldX -
-                    inspectSize/2,
-
-                    worldY -
-                    inspectSize/2,
-
-                    inspectSize,
-
-                    inspectSize
-
-                );
-
-            }
-            catch{
-
-                continue;
-
-            }
-
-            let brightPixels = 0;
-
-            const pixels =
-            imageData.data.length / 4;
-
-            for(
-                let i=0;
-                i<imageData.data.length;
-                i+=4
-            ){
-
-                const gray =
-                (
-                    imageData.data[i]
-                    +
-                    imageData.data[i+1]
-                    +
-                    imageData.data[i+2]
-                ) / 3;
-
-                if(gray > 170){
-
-                    brightPixels++;
-
-                }
-            }
-
-            const loss =
-            (
-              brightPixels /
-              pixels
-            ) * 100;
-
-            totalLoss += loss;
-
-            if(loss > 20){
-
-                failedCells++;
-
-                paintCell(
-                    localX,
-                    localY,
-                    cellSize,
-                    angle,
-                    "rgba(255,0,0,0.45)"
-                );
-
-            }
-            else{
-
-                paintCell(
-                    localX,
-                    localY,
-                    cellSize,
-                    angle,
-                    "rgba(0,255,0,0.25)"
-                );
-
-            }
-        }
-    }
-
-    const averageLoss =
-    totalLoss / 25;
-
-    const retention =
-    100 - averageLoss;
-
-    let astm="0B";
-
-    if(retention >= 95) astm="5B";
-    else if(retention >= 85) astm="4B";
-    else if(retention >= 65) astm="3B";
-    else if(retention >= 35) astm="2B";
-    else if(retention >= 10) astm="1B";
-
-    document
-    .getElementById("result")
-    .innerHTML =
-
-    `
-    ASTM : <b>${astm}</b>
-
-    <br><br>
-
-    Retention :
-    ${retention.toFixed(1)} %
-
-    <br><br>
-
-    Loss :
-    ${averageLoss.toFixed(1)} %
-
-    <br><br>
-
-    Failed Cells :
-    ${failedCells} / 25
-    `;
-}
-
-function paintCell(
-    localX,
-    localY,
-    cellSize,
-    angle,
-    color
-){
+let gridCenterX = 450;
+let gridCenterY = 450;
+
+// 분석 결과 셀 (null이면 오버레이 없음)
+let overlayCells = null;
+
+/* ---------- 이미지 불러오기 ---------- */
+
+document.getElementById("fileInput").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = () => {
+        image = img;
+        overlayCells = null;
+        resultEl.textContent = "분석 전";
+        draw();
+        URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+});
+
+/* ---------- 슬라이더 ---------- */
+
+[imgScale, imgRotation, imgX, imgY, gridSize, gridRotation].forEach(el => {
+    el.addEventListener("input", () => {
+        overlayCells = null;   // 조정하면 이전 분석 결과는 무효
+        draw();
+    });
+});
+
+threshold.addEventListener("input", () => {
+    thrVal.textContent = threshold.value;
+});
+
+/* ---------- 그리기 ---------- */
+
+function drawImageOnly() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!image) return;
+
+    const scale = parseFloat(imgScale.value);
+    const angle = parseFloat(imgRotation.value) * Math.PI / 180;
+    const w = image.width * scale;
+    const h = image.height * scale;
 
     ctx.save();
-
     ctx.translate(
-        gridCenterX,
-        gridCenterY
+        canvas.width / 2 + parseInt(imgX.value),
+        canvas.height / 2 + parseInt(imgY.value)
     );
+    ctx.rotate(angle);
+    ctx.drawImage(image, -w / 2, -h / 2, w, h);
+    ctx.restore();
+}
 
+function drawGrid() {
+    const size = parseInt(gridSize.value);
+    const cell = size / 5;
+    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
+
+    ctx.save();
+    ctx.translate(gridCenterX, gridCenterY);
     ctx.rotate(angle);
 
-    ctx.fillStyle =
-    color;
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-size / 2 + cell * i, -size / 2);
+        ctx.lineTo(-size / 2 + cell * i, size / 2);
+        ctx.stroke();
 
-    ctx.fillRect(
-        localX,
-        localY,
-        cellSize,
-        cellSize
-    );
+        ctx.beginPath();
+        ctx.moveTo(-size / 2, -size / 2 + cell * i);
+        ctx.lineTo(size / 2, -size / 2 + cell * i);
+        ctx.stroke();
+    }
+
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-size / 2, -size / 2, size, size);
+
+    ctx.strokeStyle = "yellow";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-20, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(0, 20);
+    ctx.stroke();
 
     ctx.restore();
 }
-draw();
 
-};
+function drawOverlay() {
+    if (!overlayCells) return;
 
-img.src=
-URL.createObjectURL(file);
+    const size = parseInt(gridSize.value);
+    const cellSize = size / 5;
+    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
 
+    ctx.save();
+    ctx.translate(gridCenterX, gridCenterY);
+    ctx.rotate(angle);
+
+    overlayCells.forEach(c => {
+        ctx.fillStyle = c.failed
+            ? "rgba(255,0,0,0.45)"
+            : "rgba(0,255,0,0.25)";
+        ctx.fillRect(c.localX, c.localY, cellSize, cellSize);
+    });
+
+    ctx.restore();
 }
-);
 
-[
-imgScale,
-imgRotation,
-imgX,
-imgY,
-gridSize,
-gridRotation
+function draw() {
+    drawImageOnly();
+    drawOverlay();
+    drawGrid();
+}
 
-].forEach(x=>{
+/* ---------- 분석 ---------- */
 
-x.addEventListener(
-"input",
-draw
-);
+function gradeFromLoss(loss) {
+    // ASTM D3359 (Method B) 박리 면적 기준
+    if (loss <= 0.5) return "5B";   // 0%
+    if (loss < 5)    return "4B";   // 5% 미만
+    if (loss < 15)   return "3B";   // 5 ~ 15%
+    if (loss < 35)   return "2B";   // 15 ~ 35%
+    if (loss < 65)   return "1B";   // 35 ~ 65%
+    return "0B";                    // 65% 초과
+}
 
+function analyzeCrossCut() {
+    if (!image) {
+        resultEl.textContent = "먼저 사진을 올려주세요";
+        return;
+    }
+
+    // 격자선/오버레이 없이 사진만 그린 상태에서 픽셀을 읽는다
+    drawImageOnly();
+
+    const size = parseFloat(gridSize.value);
+    const cellSize = size / 5;
+    const angle = parseFloat(gridRotation.value) * Math.PI / 180;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const thr = parseFloat(threshold.value);
+    const inspectSize = Math.max(Math.round(cellSize * 0.4), 10);
+
+    const cells = [];
+    let failedCells = 0;
+    let totalLoss = 0;
+
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+            const localX = -size / 2 + col * cellSize;
+            const localY = -size / 2 + row * cellSize;
+            const cx = localX + cellSize / 2;
+            const cy = localY + cellSize / 2;
+
+            const worldX = gridCenterX + cx * cosA - cy * sinA;
+            const worldY = gridCenterY + cx * sinA + cy * cosA;
+
+            // 캔버스 밖으로 나가는 영역은 잘라냄
+            let x0 = Math.round(worldX - inspectSize / 2);
+            let y0 = Math.round(worldY - inspectSize / 2);
+            let x1 = x0 + inspectSize;
+            let y1 = y0 + inspectSize;
+            x0 = Math.max(0, x0);
+            y0 = Math.max(0, y0);
+            x1 = Math.min(canvas.width, x1);
+            y1 = Math.min(canvas.height, y1);
+
+            if (x1 <= x0 || y1 <= y0) {
+                cells.push({ localX, localY, failed: false });
+                continue;
+            }
+
+            let data;
+            try {
+                data = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+            } catch (err) {
+                cells.push({ localX, localY, failed: false });
+                continue;
+            }
+
+            let bright = 0;
+            const pixels = data.length / 4;
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                if (gray > thr) bright++;
+            }
+
+            const loss = (bright / pixels) * 100;
+            totalLoss += loss;
+
+            const failed = loss > 20;
+            if (failed) failedCells++;
+            cells.push({ localX, localY, failed });
+        }
+    }
+
+    const averageLoss = totalLoss / 25;
+    const retention = 100 - averageLoss;
+    const astm = gradeFromLoss(averageLoss);
+
+    overlayCells = cells;
+    draw();
+
+    resultEl.innerHTML =
+        `ASTM : <b>${astm}</b><br>` +
+        `Retention : ${retention.toFixed(1)} %<br>` +
+        `Loss : ${averageLoss.toFixed(1)} %<br>` +
+        `Failed Cells : ${failedCells} / 25`;
+}
+
+document.getElementById("analyzeBtn").addEventListener("click", analyzeCrossCut);
+
+/* ---------- Grid 드래그 (마우스/터치 공통) ---------- */
+
+let dragging = false;
+
+function moveGridTo(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    gridCenterX = (clientX - rect.left) * canvas.width / rect.width;
+    gridCenterY = (clientY - rect.top) * canvas.height / rect.height;
+    overlayCells = null;
+    draw();
+}
+
+canvas.addEventListener("pointerdown", e => {
+    dragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    moveGridTo(e.clientX, e.clientY);
 });
 
-function draw(){
-
-ctx.clearRect(
-0,
-0,
-canvas.width,
-canvas.height
-);
-
-drawImage();
-
-drawGrid();
-
-}
-
-function drawImage(){
-
-if(!image) return;
-
-const scale =
-parseFloat(
-imgScale.value
-);
-
-const angle =
-parseFloat(
-imgRotation.value
-)
-*
-Math.PI
-/
-180;
-
-const w =
-image.width*scale;
-
-const h =
-image.height*scale;
-
-ctx.save();
-
-ctx.translate(
-
-canvas.width/2
-+
-parseInt(imgX.value),
-
-canvas.height/2
-+
-parseInt(imgY.value)
-
-);
-
-ctx.rotate(angle);
-
-ctx.drawImage(
-
-image,
-
--w/2,
-
--h/2,
-
-w,
-
-h
-
-);
-
-ctx.restore();
-
-}
-
-function drawGrid(){
-
-const size =
-parseInt(
-gridSize.value
-);
-
-const cell =
-size/5;
-
-const angle =
-parseFloat(
-gridRotation.value
-)
-*
-Math.PI
-/
-180;
-
-ctx.save();
-
-ctx.translate(
-gridCenterX,
-gridCenterY
-);
-
-ctx.rotate(angle);
-
-ctx.strokeStyle=
-"cyan";
-
-ctx.lineWidth=2;
-
-for(let i=0;i<=5;i++){
-
-ctx.beginPath();
-
-ctx.moveTo(
--size/2 + cell*i,
--size/2
-);
-
-ctx.lineTo(
--size/2 + cell*i,
-size/2
-);
-
-ctx.stroke();
-
-ctx.beginPath();
-
-ctx.moveTo(
--size/2,
--size/2 + cell*i
-);
-
-ctx.lineTo(
-size/2,
--size/2 + cell*i
-);
-
-ctx.stroke();
-
-}
-
-ctx.strokeStyle=
-"lime";
-
-ctx.lineWidth=4;
-
-ctx.strokeRect(
--size/2,
--size/2,
-size,
-size
-);
-
-ctx.strokeStyle=
-"yellow";
-
-ctx.lineWidth=3;
-
-ctx.beginPath();
-ctx.moveTo(
--20,
-0
-);
-ctx.lineTo(
-20,
-0
-);
-ctx.stroke();
-
-ctx.beginPath();
-ctx.moveTo(
-0,
--20
-);
-ctx.lineTo(
-0,
-20
-);
-ctx.stroke();
-
-ctx.restore();
-
-}
-
-let dragging=false;
-
-canvas.addEventListener(
-"touchstart",
-e=>{
-
-dragging=true;
-
-}
-);
-
-canvas.addEventListener(
-"touchend",
-e=>{
-
-dragging=false;
-
-}
-);
-
-canvas.addEventListener(
-"touchmove",
-e=>{
-
-if(!dragging) return;
-
-e.preventDefault();
-
-const rect =
-canvas.getBoundingClientRect();
-
-const touch =
-e.touches[0];
-
-gridCenterX =
-(
-touch.clientX
--
-rect.left
-)
-*
-canvas.width
-/
-rect.width;
-
-gridCenterY =
-(
-touch.clientY
--
-rect.top
-)
-*
-canvas.height
-/
-rect.height;
-
-draw();
-
+canvas.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    moveGridTo(e.clientX, e.clientY);
 });
 
-canvas.addEventListener(
-"mousedown",
-()=>{
-
-dragging=true;
-
-}
-);
-
-canvas.addEventListener(
-"mouseup",
-()=>{
-
-dragging=false;
-
-}
-);
-
-canvas.addEventListener(
-"mousemove",
-e=>{
-
-if(!dragging) return;
-
-const rect =
-canvas.getBoundingClientRect();
-
-gridCenterX =
-(
-e.clientX
--
-rect.left
-)
-*
-canvas.width
-/
-rect.width;
-
-gridCenterY =
-(
-e.clientY
--
-rect.top
-)
-*
-canvas.height
-/
-rect.height;
-
-draw();
-
+["pointerup", "pointercancel"].forEach(type => {
+    canvas.addEventListener(type, () => { dragging = false; });
 });
 
 draw();
-
 </script>
 
 </body>
